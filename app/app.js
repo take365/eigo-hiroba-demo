@@ -16,7 +16,7 @@ function buildCards(genre){return genre.words.map(([jp,en,img])=>({jp,en,img,hin
 let cardIndex = 0, quizIndex = 0, speakIndex = 0, pairIndex = 0;
 const $ = s => document.querySelector(s);
 function renderGenres(){
-  const row=$('.genre-row'); row.innerHTML=genreData.map(g=>`<button class="genre ${g.id===activeGenreId?'selected':''} ${g.unlocked?'':'locked'}" data-genre="${g.id}" ${g.unlocked?'':'disabled'}>${g.emoji}<span>${g.name}</span><em>${g.unlocked?'3こ':'🔒'}</em></button>`).join('');
+  const row=$('.genre-row'); row.innerHTML=genreData.map(g=>{const p=genreProgress(g.id); return `<button class="genre ${g.id===activeGenreId?'selected':''} ${g.unlocked?'':'locked'}" data-genre="${g.id}" ${g.unlocked?'':'disabled'}>${g.emoji}<span>${g.name}</span><em>${g.unlocked?(p.treasure?'✅':'3こ'):'🔒'}</em></button>`}).join('');
   row.querySelectorAll('.genre:not(:disabled)').forEach(b=>b.addEventListener('click',()=>{const g=genreData.find(x=>x.id===b.dataset.genre); activeGenreId=g.id; cards=buildCards(g); cardIndex=quizIndex=speakIndex=pairIndex=0; $('#cards h2').textContent=`${g.name}の ことば`; renderGenres(); renderCard();}));
 }
 function showView(id) { document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === id)); window.scrollTo({top:0, behavior:'smooth'}); if (id === 'quiz') renderQuiz(); if (id === 'speak') renderSpeak(); if (id === 'pair') renderPair(); if (id === 'today') renderToday(); if (id === 'categorySelect') renderCategorySelect(); }
