@@ -7,5 +7,6 @@ RUN git clone --depth 1 https://github.com/Halleck45/OpenPronounce.git /opt/Open
 
 WORKDIR /opt/OpenPronounce
 ENV OPENPRONOUNCE_DEVICE=cpu
+ENV OPENPRONOUNCE_TTS=gtts
 EXPOSE 8000
 CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"]

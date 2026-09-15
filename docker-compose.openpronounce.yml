@@ -7,7 +7,8 @@ services:
       - "8010:8000"
     environment:
       OPENPRONOUNCE_DEVICE: cpu
-      OPENPRONOUNCE_TTS: piper
+      # gTTSは追加の音声パッケージ不要。参照音声は初回分析時に生成される。
+      OPENPRONOUNCE_TTS: gtts
     volumes:
       - openpronounce-models:/root/.cache/huggingface
 
