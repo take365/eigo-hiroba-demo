@@ -3,9 +3,9 @@ const cards = [
   {jp:'りんご', en:'apple', img:'assets/apple.png', hint:'赤くて まるい くだものだよ。', example:'I eat an apple.', translation:'りんごを たべます。'},
   {jp:'かばん', en:'backpack', img:'assets/backpack.png', hint:'きょうしつへ もっていく ものだよ。', example:'My backpack is blue.', translation:'わたしの かばんは あおです。'}
 ];
-let cardIndex = 0, quizIndex = 0;
+let cardIndex = 0, quizIndex = 0, speakIndex = 0, pairIndex = 0;
 const $ = s => document.querySelector(s);
-function showView(id) { document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === id)); window.scrollTo({top:0, behavior:'smooth'}); if (id === 'quiz') renderQuiz(); }
+function showView(id) { document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === id)); window.scrollTo({top:0, behavior:'smooth'}); if (id === 'quiz') renderQuiz(); if (id === 'speak') renderSpeak(); if (id === 'pair') renderPair(); if (id === 'today') renderToday(); }
 document.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => showView(b.dataset.view)));
 function renderCard() {
   const c = cards[cardIndex]; $('#wordImage').src = c.img; $('#wordImage').alt = c.en+'のイラスト'; $('#wordJp').textContent = c.jp; $('#wordEn').textContent = c.en; $('#wordHint').textContent = c.hint; $('#wordExample').textContent = c.example; $('#wordExample').nextElementSibling.textContent = c.translation; $('#cardCount').textContent = `${cardIndex+1} / ${cards.length}`; $('#cardDots').innerHTML = cards.map((_,i) => `<i class="${i===cardIndex?'active':''}"></i>`).join('');
@@ -17,6 +17,16 @@ function renderQuiz() {
 }
 function answer(btn, correct) { document.querySelectorAll('.choice').forEach(b => b.disabled = true); if (btn.dataset.answer === correct) { btn.classList.add('correct'); $('#result').textContent = 'せいかい！ すごいね 🎉'; $('#result').classList.add('ok'); } else { btn.classList.add('wrong'); $('#result').textContent = `おしい！ せいかいは「${correct}」だよ。`; $('#result').classList.add('ng'); document.querySelector(`[data-answer="${correct}"]`).classList.add('correct'); } $('#nextQuiz').disabled = false; }
 $('#nextQuiz').addEventListener('click', () => { quizIndex = (quizIndex+1) % cards.length; renderQuiz(); });
+function renderSpeak(){const c=cards[speakIndex]; $('#speakImage').src=c.img; $('#speakImage').alt=c.en+'のイラスト'; $('#speakEn').textContent=c.en; $('#speakCount').textContent=`${speakIndex+1} / ${cards.length}`; $('#speakResult').textContent='まずは おてほんを きいてみよう。'; $('#speakResult').className='result';}
+$('#speakSample').addEventListener('click',async()=>{const c=cards[speakIndex]; try{const r=await fetch('/api/speak',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:c.en,target:c.en})}); new Audio(URL.createObjectURL(await r.blob())).play();}catch{}});
+$('#nextSpeak').addEventListener('click',()=>{speakIndex=(speakIndex+1)%cards.length;renderSpeak();});
+let speakRecorder, speakChunks=[];
+$('#speakPractice').addEventListener('click',async()=>{const btn=$('#speakPractice'), status=$('#speakResult'); if(speakRecorder?.state==='recording'){speakRecorder.stop();return;} try{const stream=await navigator.mediaDevices.getUserMedia({audio:true}); speakChunks=[]; speakRecorder=new MediaRecorder(stream); speakRecorder.ondataavailable=e=>speakChunks.push(e.data); speakRecorder.onstop=async()=>{stream.getTracks().forEach(t=>t.stop()); btn.textContent='🎙️ いってみる'; status.textContent='はつおんを きいているよ…'; try{const c=cards[speakIndex]; const r=await fetch(`/api/pronounce?expected=${encodeURIComponent(c.en)}`,{method:'POST',headers:{'Content-Type':speakRecorder.mimeType||'audio/webm'},body:new Blob(speakChunks,{type:speakRecorder.mimeType||'audio/webm'})}); const d=await r.json(); status.textContent=d.feedback||'もういちど やってみよう。'; status.className='result '+(d.matched?'ok':'ng');}catch{status.textContent='うまく ききとれなかったよ。';}}; speakRecorder.start(); btn.textContent='⏹ おわる'; status.textContent='いってみよう！'; setTimeout(()=>{if(speakRecorder?.state==='recording')speakRecorder.stop()},2500);}catch{status.textContent='マイクが つかえないようです。';}});
+function renderPair(){const c=cards[pairIndex]; $('#pairImage').src=c.img; $('#pairCount').textContent=`${pairIndex+1} / ${cards.length}`; $('#pairResult').textContent=''; $('#pairResult').className='result'; $('#nextPair').disabled=true; const opts=[c.en,...cards.filter((_,i)=>i!==pairIndex).map(x=>x.en)].sort(()=>Math.random()-.5); $('#pairChoices').innerHTML=opts.map(x=>`<button class="choice" data-answer="${x}">${x}</button>`).join(''); document.querySelectorAll('#pairChoices .choice').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('#pairChoices .choice').forEach(x=>x.disabled=true); const ok=b.dataset.answer===c.en; b.classList.add(ok?'correct':'wrong'); if(!ok) document.querySelector(`#pairChoices [data-answer="${c.en}"]`).classList.add('correct'); $('#pairResult').textContent=ok?'せいかい！ ぴったりペアだね 🎉':`おしい！ せいかいは「${c.en}」だよ。`; $('#pairResult').classList.add(ok?'ok':'ng'); $('#nextPair').disabled=false;}));}
+$('#nextPair').addEventListener('click',()=>{pairIndex=(pairIndex+1)%cards.length;renderPair();});
+const todayModes=['quiz','pair','speak','cards']; let todayIndex=0;
+function renderToday(){todayIndex=Math.floor(Math.random()*todayModes.length); $('#todayCount').textContent='ランダム'; $('#todayMessage').textContent={quiz:'絵を見て、英単語をえらぼう！',pair:'絵と英単語をつなごう！',speak:'英単語をまねして発音しよう！',cards:'カードでことばをおぼえよう！'}[todayModes[todayIndex]];}
+$('#todayStart').addEventListener('click',()=>showView(todayModes[todayIndex]));
 let audio;
 $('.sound').addEventListener('click', async () => {
   const c = cards[cardIndex]; $('#speakStatus').textContent = 'おてほんの おとを じゅんび中…';
