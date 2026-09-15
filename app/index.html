@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>えいごのたからじま</title><link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar"><div class="brand"><span class="brand-mark">★</span><div><small>たのしく まなぼう</small><h1>えいごのたからじま</h1></div></div><div class="avatar">ゆ</div></header>
+    <section id="home" class="view active">
+      <div class="welcome"><div><p class="eyebrow">GOOD MORNING!</p><h2>ゆうきさん、こんにちは！</h2><p>きょうも えいごを ひとつ おぼえよう。</p></div><div class="streak">🔥 <strong>3</strong><span>れんぞく<br>にち</span></div></div>
+      <div class="progress-card"><div><span>きょうの もくひょう</span><strong>2 / 5 こ クリア</strong></div><div class="progress"><i style="width:40%"></i></div><small>あと3こで きょうのバッジ！</small></div>
+      <h3>なにを する？</h3><div class="menu-grid"><button class="menu-card cards" data-view="cards"><span class="emoji">🗂️</span><b>ことばのたからばこ</b><small>絵を見て、ことばをおぼえよう</small><span class="arrow">›</span></button><button class="menu-card quiz" data-view="quiz"><span class="emoji">🎯</span><b>ことばチャレンジ</b><small>3たくクイズにちょうせん！</small><span class="arrow">›</span></button><button class="menu-card today" data-view="cards"><span class="emoji">🌈</span><b>きょうの れんしゅう</b><small>おすすめを 2こ えらんだよ</small><span class="arrow">›</span></button></div>
+      <h3>ジャンルから えらぶ</h3><div class="genre-row"><button class="genre selected">🐾<span>どうぶつ</span><em>3こ</em></button><button class="genre">🍎<span>たべもの</span><em>2こ</em></button><button class="genre">🎒<span>がっこう</span><em>2こ</em></button></div>
+    </section>
+    <section id="cards" class="view"><button class="back" data-view="home">‹ ホームへ</button><div class="section-head"><div><p class="eyebrow">ことばのたからばこ</p><h2>どうぶつの ことば</h2></div><span class="count" id="cardCount">1 / 3</span></div><div class="word-card"><div class="picture-wrap"><img id="wordImage" src="assets/cat.png" alt="catのイラスト"></div><div class="word-jp" id="wordJp">ねこ</div><div class="word-en" id="wordEn">cat</div><p id="wordHint">おうちで いっしょに くらす どうぶつだよ。</p><button class="sound" aria-label="発音を聞く">🔊 <span>おとを きく</span></button></div><div class="dots" id="cardDots"></div><button class="primary next" id="nextCard">つぎの ことばへ　›</button></section>
+    <section id="quiz" class="view"><button class="back" data-view="home">‹ ホームへ</button><div class="section-head"><div><p class="eyebrow">ことばチャレンジ</p><h2>えいごを えらぼう！</h2></div><span class="count" id="quizCount">1 / 3</span></div><div class="quiz-card"><div class="quiz-image"><img id="quizImage" src="assets/cat.png" alt="ねこのイラスト"></div><p class="question">この えいごは どれかな？</p><div class="choices" id="choices"></div><div class="result" id="result"></div></div><button class="primary next" id="nextQuiz" disabled>つぎの もんだいへ　›</button></section>
+    <footer><span>保護者・先生向け</span><span>デモ版 · 学習データはローカル保存</span></footer>
+  </main><script src="app.js"></script>
+</body></html>
