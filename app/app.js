@@ -1,9 +1,9 @@
 const genreData = [
-  {id:'animals', name:'どうぶつ', emoji:'🐾', unlocked:true, words:[['ねこ','cat','assets/cat.png'],['いぬ','dog','assets/cat.png'],['とり','bird','assets/cat.png']]},
-  {id:'food', name:'たべもの', emoji:'🍎', unlocked:true, words:[['りんご','apple','assets/apple.png'],['パン','bread','assets/apple.png'],['ケーキ','cake','assets/apple.png']]},
-  {id:'school', name:'がっこう', emoji:'🎒', unlocked:false, words:[['かばん','backpack','assets/backpack.png'],['ほん','book','assets/backpack.png'],['えんぴつ','pencil','assets/backpack.png']]},
-  {id:'colors', name:'いろ', emoji:'🎨', unlocked:false, words:[['あか','red','assets/apple.png'],['あお','blue','assets/backpack.png'],['きいろ','yellow','assets/apple.png']]},
-  {id:'weather', name:'てんき', emoji:'☀️', unlocked:false, words:[['たいよう','sun','assets/apple.png'],['あめ','rain','assets/backpack.png'],['ゆき','snow','assets/apple.png']]}
+  {id:'animals', name:'どうぶつ', emoji:'🐾', unlocked:true, words:[['ねこ','cat','assets/cat.png'],['いぬ','dog','assets/dog.png'],['とり','bird','assets/bird.png']]},
+  {id:'food', name:'たべもの', emoji:'🍎', unlocked:true, words:[['りんご','apple','assets/apple.png'],['パン','bread','assets/bread.png'],['ケーキ','cake','assets/cake.png']]},
+  {id:'school', name:'がっこう', emoji:'🎒', unlocked:false, words:[['かばん','backpack','assets/backpack.png'],['ほん','book','assets/book.png'],['えんぴつ','pencil','assets/pencil.png']]},
+  {id:'colors', name:'いろ', emoji:'🎨', unlocked:false, words:[['あか','red','assets/red.png'],['あお','blue','assets/blue.png'],['きいろ','yellow','assets/yellow.png']]},
+  {id:'weather', name:'てんき', emoji:'☀️', unlocked:false, words:[['たいよう','sun','assets/sun.png'],['あめ','rain','assets/rain.png'],['ゆき','snow','assets/snow.png']]}
 ];
 let activeGenreId = 'animals';
 let cards = buildCards(genreData[0]);
