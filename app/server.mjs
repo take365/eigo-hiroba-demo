@@ -9,6 +9,7 @@ const key = process.env.OPENAI_API_KEY;
 const audioDir = join(root, '.cache', 'audio');
 const mime = {'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.png':'image/png','.json':'application/json'};
 const wordInfo = {cat:{jp:'ねこ'},apple:{jp:'りんご'},backpack:{jp:'かばん'}};
+const preloadWords = ['cat','apple','backpack'];
 
 async function openai(path, options) {
   if (!key) throw new Error('OPENAI_API_KEY is not set');
@@ -21,7 +22,8 @@ async function json(req) { return JSON.parse((await body(req)).toString('utf8') 
 async function send(res, status, data, headers={}) { res.writeHead(status, {'Cache-Control':'no-store','Access-Control-Allow-Origin':'*',...headers}); res.end(data); }
 async function speak(text) {
   const safe = text.toLowerCase().replace(/[^a-z0-9_-]/g,'_'); const path = join(audioDir, `${safe}.mp3`);
-  try { return await readCached(path); } catch {}
+  try { const cached = await readCached(path); console.log(`speech cache hit: ${text}`); return cached; } catch {}
+  console.log(`speech API generate: ${text}`);
   await mkdir(audioDir,{recursive:true});
   const r = await openai('audio/speech',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'gpt-4o-mini-tts',voice:'coral',input:text,instructions:'Speak clearly and slowly for an elementary school English learner.',response_format:'mp3'})});
   const data = Buffer.from(await r.arrayBuffer()); await writeFile(path,data); return data;
@@ -43,4 +45,4 @@ const server = createServer(async (req,res) => {
     const data = await readFile(file); return send(res,200,data,{'Content-Type':mime[extname(file)] || 'application/octet-stream'});
   } catch (error) { return send(res,500,JSON.stringify({error:error.message}),{'Content-Type':'application/json'}); }
 });
-server.listen(port,()=>console.log(`English demo running at http://localhost:${port}`));
+server.listen(port,()=>{ console.log(`English demo running at http://localhost:${port}`); Promise.all(preloadWords.map(speak)).then(()=>console.log('speech preload ready')).catch(error=>console.log(`speech preload skipped: ${error.message}`)); });
