@@ -44,13 +44,14 @@ async function pronunciation(req, expected) {
       const score = Number(result.score ?? 0);
       const transcript = result.transcribe || result.transcript || '';
       const errors = result.differences?.errors || [];
+      const heardPhones = (result.differences?.heard_phones || []).join(' ');
       // 小学生向けなので、OpenPronounceの短い単語で出やすい軽微な誤検出を1件まで許容する。
       const matched = score >= pronouncePassScore && errors.length <= 1;
       const feedback = matched
         ? `「${expected}」の音がよくそろっているよ！スコア ${Math.round(score)} 点 🎉`
         : `スコア ${Math.round(score)} 点。${errors[0]?.word ? `「${errors[0].word}」の音を` : '音を'}もう一度ゆっくり言ってみよう。`;
       console.log(`openpronounce result: expected=${expected} score=${score} transcript=${transcript || '(empty)'}`);
-      return {transcript, matched, feedback, score, analysis:'openpronounce', differences:result.differences || null, prosody:result.prosody || null};
+      return {transcript: heardPhones ? `${transcript}  /${heardPhones}/` : transcript, matched, feedback, score, analysis:'openpronounce', differences:result.differences || null, prosody:result.prosody || null};
     } catch (error) {
       console.log(`openpronounce unavailable, fallback to transcription: ${error.message}`);
     }
