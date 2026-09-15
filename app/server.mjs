@@ -32,9 +32,11 @@ async function speak(text, target='') {
 async function pronunciation(req, expected) {
   const audio = await body(req); const form = new FormData();
   form.append('file', new File([audio], 'speech.webm', {type:req.headers['content-type'] || 'audio/webm'})); form.append('model','gpt-4o-mini-transcribe'); form.append('language','en');
-  const r = await openai('audio/transcriptions',{method:'POST',body:form}); const transcript = (await r.json()).text || '';
+  const r = await openai('audio/transcriptions',{method:'POST',body:form}); const transcript = (await r.json()).text || ''; console.log(`pronunciation transcript: expected=${expected} heard=${transcript || '(empty)'}`);
   const norm = s => s.toLowerCase().replace(/[^a-z]/g,''); const heard=norm(transcript), target=norm(expected);
-  const matched = heard === target || heard.includes(target) || target.includes(heard);
+  // 空認識や短い断片（cat に対する c など）は一致扱いにしない。
+  const distance=(a,b)=>{const row=[...Array(b.length+1).keys()]; for(let i=1;i<=a.length;i++){let prev=row[0]; row[0]=i; for(let j=1;j<=b.length;j++){const cur=row[j]; row[j]=Math.min(row[j]+1,row[j-1]+1,prev+(a[i-1]===b[j-1]?0:1)); prev=cur;}} return row[b.length];};
+  const matched = Boolean(heard) && (heard===target || (target.length>=4 && distance(heard,target)<=1));
   let feedback = matched ? `「${expected}」と聞こえたよ！すごいね 🎉` : `おしい！「${expected}」を、もう一度ゆっくり言ってみよう。`;
   try { feedback = await realtimeFeedback(expected, transcript); } catch (error) { console.log(`realtime feedback fallback: ${error.message}`); }
   return {transcript,matched,feedback};
@@ -45,9 +47,9 @@ async function realtimeFeedback(expected, transcript) {
     const ws = new WebSocket('wss://api.openai.com/v1/realtime?model=gpt-realtime-mini',{headers:{Authorization:`Bearer ${key}`}});
     let text=''; const timer=setTimeout(()=>{try{ws.close()}catch{} reject(new Error('Realtime timeout'))},15000);
     ws.onopen=()=>{
-      const realtimeInstructions = `あなたは小学校3・4年生向け英語学習アプリの先生です。\nいま児童は英単語「${expected}」の発音を練習しています。\n対象単語は必ず英字の「${expected}」として扱い、別の単語に置き換えたり混同したりしないでください。\n判定は少し甘めにしてください。まず良かった点をほめ、次に一つだけ短い練習ヒントを日本語で返してください。\n返答は1〜2文、長文・専門用語・厳しい評価は禁止です。\n対象単語を返答内で示すときは英字「${expected}」を使い、カタカナによる読み方（例：カット、アップル）は絶対に書かないでください。音声で対象単語を発話するときも、日本語読みではなく正しい自然な英語の発音にしてください。`;
+      const realtimeInstructions = `あなたは小学校3・4年生向け英語学習アプリの先生です。\nいま児童は英単語「${expected}」の発音を練習しています。\n対象単語は必ず英字の「${expected}」として扱い、別の単語に置き換えたり混同したりしないでください。\n音声認識で聞こえた結果を必ず確認し、空欄または明らかに別の単語なら「もういちど ゆっくり言ってみよう」と伝えてください。\n判定は少し甘めにしてください。まず良かった点をほめ、次に一つだけ短い練習ヒントを日本語で返してください。\n返答は1〜2文、長文・専門用語・厳しい評価は禁止です。\n対象単語を返答内で示すときは英字「${expected}」を使い、カタカナによる読み方（例：カット、アップル）は絶対に書かないでください。音声で対象単語を発話するときも、日本語読みではなく正しい自然な英語の発音にしてください。`;
       ws.send(JSON.stringify({type:'session.update',session:{type:'realtime',output_modalities:['text'],instructions:realtimeInstructions}}));
-      ws.send(JSON.stringify({type:'conversation.item.create',item:{type:'message',role:'user',content:[{type:'input_text',text:`背景：児童は小学校3〜4年生。英単語の発音練習をしています。\n対象単語（固定）：${expected}\n音声認識で聞こえた結果：${transcript || '(聞き取りにくい)'}\nこの「${expected}」の発音への、やさしく具体的な日本語の講評を1〜2文で返してください。対象単語を別の単語と取り違えないでください。`}]}}));
+      ws.send(JSON.stringify({type:'conversation.item.create',item:{type:'message',role:'user',content:[{type:'input_text',text:`背景：児童は小学校3〜4年生。英単語の発音練習をしています。\n対象単語（固定）：${expected}\n音声認識で聞こえた結果（判定材料）：${transcript || '(空の認識結果)'}\nこの認識結果を必ず根拠にして、「${expected}」の発音へのやさしく具体的な日本語の講評を1〜2文で返してください。空または別単語なら合格と言わず、もう一度促してください。対象単語を別の単語と取り違えないでください。`}]}}));
       ws.send(JSON.stringify({type:'response.create',response:{output_modalities:['text']}}));
     };
     ws.onmessage=event=>{ try { const msg=JSON.parse(event.data); if ((msg.type==='response.output_text.delta'||msg.type==='response.text.delta')&&msg.delta) text+=msg.delta; if (msg.type==='response.done') { clearTimeout(timer); ws.close(); resolve(text.trim() || 'よくチャレンジしたね！もう一度言ってみよう。'); } if (msg.type==='error') { clearTimeout(timer); ws.close(); reject(new Error(msg.error?.message||'Realtime error')); } } catch (error) { clearTimeout(timer); ws.close(); reject(error); } };
