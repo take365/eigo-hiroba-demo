@@ -8,6 +8,7 @@ const port = Number(process.env.PORT || 4173);
 const key = process.env.OPENAI_API_KEY;
 const openPronounceUrl = (process.env.OPENPRONOUNCE_URL || '').replace(/\/$/, '');
 const pronouncePassScore = Number(process.env.PRONOUNCE_PASS_SCORE || 45);
+const pronunciationJudgeModel = process.env.PRONUNCIATION_JUDGE_MODEL || 'gpt-5.6-luna';
 const audioDir = join(root, '.cache', 'audio');
 const mime = {'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.png':'image/png','.json':'application/json'};
 const wordInfo = {cat:{jp:'ねこ'},apple:{jp:'りんご'},backpack:{jp:'かばん'}};
@@ -51,7 +52,8 @@ async function pronunciation(req, expected) {
         ? `「${expected}」の音がよくそろっているよ！スコア ${Math.round(score)} 点 🎉`
         : `スコア ${Math.round(score)} 点。${errors[0]?.word ? `「${errors[0].word}」の音を` : '音を'}もう一度ゆっくり言ってみよう。`;
       console.log(`openpronounce result: expected=${expected} score=${score} transcript=${transcript || '(empty)'}`);
-      return {transcript: heardPhones ? `${transcript}  /${heardPhones}/` : transcript, matched, feedback, score, analysis:'openpronounce', differences:result.differences || null, prosody:result.prosody || null};
+      const judged = await judgePronunciation({expected, expectedPhones:(result.differences?.expected_phones || []).flat().join(' '), heardPhones, score, errors}).catch(error => { console.log(`luna pronunciation judge fallback: ${error.message}`); return null; });
+      return {transcript: heardPhones ? `${transcript}  /${heardPhones}/` : transcript, matched:judged?.matched ?? matched, feedback:judged?.feedback || feedback, score:judged?.score ?? score, openpronounceScore:score, analysis:judged?'openpronounce+luna':'openpronounce', differences:result.differences || null, prosody:result.prosody || null};
     } catch (error) {
       console.log(`openpronounce unavailable, fallback to transcription: ${error.message}`);
     }
@@ -65,6 +67,11 @@ async function pronunciation(req, expected) {
   let feedback = matched ? `「${expected}」と聞こえたよ！すごいね 🎉` : `おしい！「${expected}」を、もう一度ゆっくり言ってみよう。`;
   try { feedback = await realtimeFeedback(expected, transcript); } catch (error) { console.log(`realtime feedback fallback: ${error.message}`); }
   return {transcript,matched,feedback,score:matched?88:42,analysis:'transcription'};
+}
+async function judgePronunciation({expected, expectedPhones, heardPhones, score, errors}) {
+  const prompt = `あなたは小学校3・4年生向け英語発音練習アプリの採点先生です。\n背景：児童が英単語の発音を練習しています。\n対象単語（固定）：${expected}\nお手本の音（IPA/音素）：/${expectedPhones || '不明'}/\n聞こえた音（IPA/音素）：/${heardPhones || '不明'}/\n音声モデルの参考スコア：${Math.round(score)}/100\n音声モデルが報告した誤り数：${errors.length}\n\n「その英単語だと、かろうじて相手に伝わりそう」を60点の目安にして、0〜100点で採点してください。単語が別物、または音がほぼ無い場合だけ低くします。子ども向けなので、多少の音素ずれは減点しすぎず、明らかに伝わるなら70点以上にしてください。対象単語を別の単語に置き換えないでください。返答はJSONのみ。score（整数）、passed（true/false）、hint（日本語1文）、summary（日本語1文）を返してください。`;
+  const r = await openai('responses',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:pronunciationJudgeModel,input:prompt,text:{format:{type:'json_schema',name:'pronunciation_judgement',strict:true,schema:{type:'object',properties:{score:{type:'integer',minimum:0,maximum:100},passed:{type:'boolean'},hint:{type:'string'},summary:{type:'string'}},required:['score','passed','hint','summary'],additionalProperties:false}}}})});
+  const data = await r.json(); const raw = data.output_text || data.output?.flatMap(x=>x.content||[]).find(x=>x.text)?.text || ''; const parsed=JSON.parse(raw); return {score:Math.max(0,Math.min(100,Number(parsed.score))),matched:Boolean(parsed.passed),feedback:`${parsed.summary} ${parsed.hint}`};
 }
 async function realtimeFeedback(expected, transcript) {
   if (!key) throw new Error('OPENAI_API_KEY is not set');
