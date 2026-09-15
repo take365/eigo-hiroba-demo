@@ -9,6 +9,8 @@ let activeGenreId = 'animals';
 let cards = buildCards(genreData[0]);
 let pendingMode = 'cards';
 const progress = JSON.parse(localStorage.getItem('eigo-progress') || '{}');
+const unlockedIds = new Set(progress.__unlocked || genreData.filter(g=>g.unlocked).map(g=>g.id));
+genreData.forEach(g=>{g.unlocked=unlockedIds.has(g.id)});
 function genreProgress(id){return progress[id] ||= {treasure:false, quiz:false, speak:false, pair:false, master:false};}
 function buildCards(genre){return genre.words.map(([jp,en,img])=>({jp,en,img,hint:`${genre.name}の ことばだよ。`,example:`I like ${en}.`,translation:`${jp}が すきです。`}));}
 let cardIndex = 0, quizIndex = 0, speakIndex = 0, pairIndex = 0;
@@ -25,7 +27,7 @@ function startCategory(id){const g=genreData.find(x=>x.id===id); activeGenreId=i
 function renderCard() {
   const c = cards[cardIndex]; $('#wordImage').src = c.img; $('#wordImage').alt = c.en+'のイラスト'; $('#wordJp').textContent = c.jp; $('#wordEn').textContent = c.en; $('#wordHint').textContent = c.hint; $('#wordExample').textContent = c.example; $('#wordExample').nextElementSibling.textContent = c.translation; $('#cardCount').textContent = `${cardIndex+1} / ${cards.length}`; $('#cardDots').innerHTML = cards.map((_,i) => `<i class="${i===cardIndex?'active':''}"></i>`).join('');
 }
-function completeMode(mode){const p=genreProgress(activeGenreId); p[mode]=true; if(p.treasure&&p.quiz&&p.speak&&p.pair)p.master=true; localStorage.setItem('eigo-progress',JSON.stringify(progress));}
+function completeMode(mode){const p=genreProgress(activeGenreId); p[mode]=true; if(p.treasure&&p.quiz&&p.speak&&p.pair){p.master=true; const next=genreData.find(g=>!g.unlocked); if(next){next.unlocked=true; unlockedIds.add(next.id); p.unlockMessage=`${next.name}がアンロックされたよ！`;}} progress.__unlocked=[...unlockedIds]; localStorage.setItem('eigo-progress',JSON.stringify(progress));}
 $('#nextCard').addEventListener('click', () => { if(cardIndex===cards.length-1){completeMode('treasure'); $('#speakStatus').textContent='🎉 たからばこクリア！ れんしゅうがアンロックされたよ';} cardIndex = (cardIndex+1) % cards.length; renderCard(); });
 function renderQuiz() {
   const c = cards[quizIndex]; $('#quizImage').src = c.img; $('#quizImage').alt = c.jp+'のイラスト'; $('#quizCount').textContent = `${quizIndex+1} / ${cards.length}`; $('#result').textContent = ''; $('#result').className = 'result'; $('#nextQuiz').disabled = true;
