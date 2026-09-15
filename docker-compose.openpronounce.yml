@@ -1,0 +1,15 @@
+services:
+  openpronounce:
+    build:
+      context: .
+      dockerfile: openpronounce.Dockerfile
+    ports:
+      - "8010:8000"
+    environment:
+      OPENPRONOUNCE_DEVICE: cpu
+      OPENPRONOUNCE_TTS: piper
+    volumes:
+      - openpronounce-models:/root/.cache/huggingface
+
+volumes:
+  openpronounce-models:

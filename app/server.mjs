@@ -6,6 +6,8 @@ import {fileURLToPath} from 'node:url';
 const root = fileURLToPath(new URL('.', import.meta.url));
 const port = Number(process.env.PORT || 4173);
 const key = process.env.OPENAI_API_KEY;
+const openPronounceUrl = (process.env.OPENPRONOUNCE_URL || '').replace(/\/$/, '');
+const pronouncePassScore = Number(process.env.PRONOUNCE_PASS_SCORE || 45);
 const audioDir = join(root, '.cache', 'audio');
 const mime = {'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.png':'image/png','.json':'application/json'};
 const wordInfo = {cat:{jp:'ねこ'},apple:{jp:'りんご'},backpack:{jp:'かばん'}};
@@ -31,6 +33,28 @@ async function speak(text, target='') {
 }
 async function pronunciation(req, expected) {
   const audio = await body(req); const form = new FormData();
+  if (openPronounceUrl) {
+    try {
+      const opForm = new FormData();
+      opForm.append('file', new Blob([audio], {type:req.headers['content-type'] || 'audio/webm'}), 'speech.webm');
+      opForm.append('expected_text', expected); opForm.append('lang', 'en');
+      const op = await fetch(`${openPronounceUrl}/pronunciation`, {method:'POST', body:opForm});
+      if (!op.ok) throw new Error(`OpenPronounce ${op.status}: ${await op.text()}`);
+      const result = await op.json();
+      const score = Number(result.score ?? 0);
+      const transcript = result.transcribe || result.transcript || '';
+      const errors = result.differences?.errors || [];
+      // 小学生向けなので、OpenPronounceの短い単語で出やすい軽微な誤検出を1件まで許容する。
+      const matched = score >= pronouncePassScore && errors.length <= 1;
+      const feedback = matched
+        ? `「${expected}」の音がよくそろっているよ！スコア ${Math.round(score)} 点 🎉`
+        : `スコア ${Math.round(score)} 点。${errors[0]?.word ? `「${errors[0].word}」の音を` : '音を'}もう一度ゆっくり言ってみよう。`;
+      console.log(`openpronounce result: expected=${expected} score=${score} transcript=${transcript || '(empty)'}`);
+      return {transcript, matched, feedback, score, analysis:'openpronounce', differences:result.differences || null, prosody:result.prosody || null};
+    } catch (error) {
+      console.log(`openpronounce unavailable, fallback to transcription: ${error.message}`);
+    }
+  }
   form.append('file', new File([audio], 'speech.webm', {type:req.headers['content-type'] || 'audio/webm'})); form.append('model','gpt-4o-mini-transcribe'); form.append('language','en');
   const r = await openai('audio/transcriptions',{method:'POST',body:form}); const transcript = (await r.json()).text || ''; console.log(`pronunciation transcript: expected=${expected} heard=${transcript || '(empty)'}`);
   const norm = s => s.toLowerCase().replace(/[^a-z]/g,''); const heard=norm(transcript), target=norm(expected);
@@ -39,7 +63,7 @@ async function pronunciation(req, expected) {
   const matched = Boolean(heard) && (heard===target || (target.length>=4 && distance(heard,target)<=1));
   let feedback = matched ? `「${expected}」と聞こえたよ！すごいね 🎉` : `おしい！「${expected}」を、もう一度ゆっくり言ってみよう。`;
   try { feedback = await realtimeFeedback(expected, transcript); } catch (error) { console.log(`realtime feedback fallback: ${error.message}`); }
-  return {transcript,matched,feedback};
+  return {transcript,matched,feedback,score:matched?88:42,analysis:'transcription'};
 }
 async function realtimeFeedback(expected, transcript) {
   if (!key) throw new Error('OPENAI_API_KEY is not set');
