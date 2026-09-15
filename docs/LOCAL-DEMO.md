@@ -43,3 +43,13 @@ $env:MOODLE_DOCKER_DB_VERSION = '17'
 2. 先生・児童のデモユーザー作成と手動登録
 3. 児童の完了条件・評定、先生の進捗画面確認
 4. 音声素材（発音）とスマートフォン表示の調整
+
+## 子ども向け画面の起動
+
+OpenAI APIを使う場合は、`OPENAI_API_KEY`を設定したPowerShellで以下を実行する。キーはブラウザへ渡さず、`app/server.mjs`が中継する。
+
+```powershell
+node .\app\server.mjs
+```
+
+http://localhost:4173/ で開く。「おとを きく」は `audio/speech` で生成した音声をローカルキャッシュし、「いってみる」は録音後に音声認識APIで単語を確認する。発音の音素採点ではなく、まずは聞き取り結果に基づくやさしいフィードバックを行う。
