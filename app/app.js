@@ -17,4 +17,17 @@ function renderQuiz() {
 }
 function answer(btn, correct) { document.querySelectorAll('.choice').forEach(b => b.disabled = true); if (btn.dataset.answer === correct) { btn.classList.add('correct'); $('#result').textContent = 'せいかい！ すごいね 🎉'; $('#result').classList.add('ok'); } else { btn.classList.add('wrong'); $('#result').textContent = `おしい！ せいかいは「${correct}」だよ。`; $('#result').classList.add('ng'); document.querySelector(`[data-answer="${correct}"]`).classList.add('correct'); } $('#nextQuiz').disabled = false; }
 $('#nextQuiz').addEventListener('click', () => { quizIndex = (quizIndex+1) % cards.length; renderQuiz(); });
+let audio;
+$('.sound').addEventListener('click', async () => {
+  const c = cards[cardIndex]; $('#speakStatus').textContent = 'おてほんの おとを じゅんび中…';
+  try { const response = await fetch('/api/speak',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:c.en})}); if (!response.ok) throw new Error('speech failed'); audio = new Audio(URL.createObjectURL(await response.blob())); await audio.play(); $('#speakStatus').textContent = 'おてほんを きいたよ'; } catch { $('#speakStatus').textContent = 'おとを じゅんびできませんでした（API設定を確認）'; }
+});
+let recorder, chunks=[];
+$('#speakWord').addEventListener('click', async () => {
+  const button = $('#speakWord'); const status = $('#speakStatus');
+  if (recorder?.state === 'recording') { recorder.stop(); return; }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({audio:true}); recorder = new MediaRecorder(stream); chunks=[]; recorder.ondataavailable=e=>chunks.push(e.data); recorder.onstop=async()=>{ stream.getTracks().forEach(t=>t.stop()); button.classList.remove('recording'); button.querySelector('span').textContent='いってみる'; status.textContent='はつおんを きいているよ…'; const result=await fetch(`/api/pronounce?expected=${encodeURIComponent(cards[cardIndex].en)}`,{method:'POST',headers:{'Content-Type':recorder.mimeType||'audio/webm'},body:new Blob(chunks,{type:recorder.mimeType||'audio/webm'})}); const data=await result.json(); status.textContent=data.feedback||'もういちど チャレンジしてみよう。'; status.style.color=data.matched?'#279b78':'#d75d72'; }; recorder.start(); button.classList.add('recording'); button.querySelector('span').textContent='おわる'; status.textContent='いってみよう！'; setTimeout(()=>{if(recorder?.state==='recording') recorder.stop()},2500);
+  } catch { status.textContent='マイクが つかえないようです。おてほんを きいてみよう。'; }
+});
 renderCard();
