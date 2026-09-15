@@ -1,10 +1,19 @@
-const cards = [
-  {jp:'ねこ', en:'cat', img:'assets/cat.png', hint:'おうちで いっしょに くらす どうぶつだよ。', example:'I like cats.', translation:'ねこが すきです。'},
-  {jp:'りんご', en:'apple', img:'assets/apple.png', hint:'赤くて まるい くだものだよ。', example:'I eat an apple.', translation:'りんごを たべます。'},
-  {jp:'かばん', en:'backpack', img:'assets/backpack.png', hint:'きょうしつへ もっていく ものだよ。', example:'My backpack is blue.', translation:'わたしの かばんは あおです。'}
+const genreData = [
+  {id:'animals', name:'どうぶつ', emoji:'🐾', unlocked:true, words:[['ねこ','cat','assets/cat.png'],['いぬ','dog','assets/cat.png'],['とり','bird','assets/cat.png']]},
+  {id:'food', name:'たべもの', emoji:'🍎', unlocked:true, words:[['りんご','apple','assets/apple.png'],['パン','bread','assets/apple.png'],['ケーキ','cake','assets/apple.png']]},
+  {id:'school', name:'がっこう', emoji:'🎒', unlocked:false, words:[['かばん','backpack','assets/backpack.png'],['ほん','book','assets/backpack.png'],['えんぴつ','pencil','assets/backpack.png']]},
+  {id:'colors', name:'いろ', emoji:'🎨', unlocked:false, words:[['あか','red','assets/apple.png'],['あお','blue','assets/backpack.png'],['きいろ','yellow','assets/apple.png']]},
+  {id:'weather', name:'てんき', emoji:'☀️', unlocked:false, words:[['たいよう','sun','assets/apple.png'],['あめ','rain','assets/backpack.png'],['ゆき','snow','assets/apple.png']]}
 ];
+let activeGenreId = 'animals';
+let cards = buildCards(genreData[0]);
+function buildCards(genre){return genre.words.map(([jp,en,img])=>({jp,en,img,hint:`${genre.name}の ことばだよ。`,example:`I like ${en}.`,translation:`${jp}が すきです。`}));}
 let cardIndex = 0, quizIndex = 0, speakIndex = 0, pairIndex = 0;
 const $ = s => document.querySelector(s);
+function renderGenres(){
+  const row=$('.genre-row'); row.innerHTML=genreData.map(g=>`<button class="genre ${g.id===activeGenreId?'selected':''} ${g.unlocked?'':'locked'}" data-genre="${g.id}" ${g.unlocked?'':'disabled'}>${g.emoji}<span>${g.name}</span><em>${g.unlocked?'3こ':'🔒'}</em></button>`).join('');
+  row.querySelectorAll('.genre:not(:disabled)').forEach(b=>b.addEventListener('click',()=>{const g=genreData.find(x=>x.id===b.dataset.genre); activeGenreId=g.id; cards=buildCards(g); cardIndex=quizIndex=speakIndex=pairIndex=0; $('#cards h2').textContent=`${g.name}の ことば`; renderGenres(); renderCard();}));
+}
 function showView(id) { document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === id)); window.scrollTo({top:0, behavior:'smooth'}); if (id === 'quiz') renderQuiz(); if (id === 'speak') renderSpeak(); if (id === 'pair') renderPair(); if (id === 'today') renderToday(); }
 document.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => showView(b.dataset.view)));
 function renderCard() {
@@ -53,4 +62,5 @@ const speakFeedbackObserver = new MutationObserver(async () => {
   } catch {}
 });
 speakFeedbackObserver.observe($('#speakResult'), {childList:true, characterData:true, subtree:true});
+renderGenres();
 renderCard();
