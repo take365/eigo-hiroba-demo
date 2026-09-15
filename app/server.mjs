@@ -34,7 +34,23 @@ async function pronunciation(req, expected) {
   const r = await openai('audio/transcriptions',{method:'POST',body:form}); const transcript = (await r.json()).text || '';
   const norm = s => s.toLowerCase().replace(/[^a-z]/g,''); const heard=norm(transcript), target=norm(expected);
   const matched = heard === target || heard.includes(target) || target.includes(heard);
-  return {transcript,matched,feedback:matched?`「${expected}」と聞こえたよ！すごいね 🎉`:`おしい！「${expected}」を、もう一度ゆっくり言ってみよう。`};
+  let feedback = matched ? `「${expected}」と聞こえたよ！すごいね 🎉` : `おしい！「${expected}」を、もう一度ゆっくり言ってみよう。`;
+  try { feedback = await realtimeFeedback(expected, transcript); } catch (error) { console.log(`realtime feedback fallback: ${error.message}`); }
+  return {transcript,matched,feedback};
+}
+async function realtimeFeedback(expected, transcript) {
+  if (!key) throw new Error('OPENAI_API_KEY is not set');
+  return await new Promise((resolve,reject) => {
+    const ws = new WebSocket('wss://api.openai.com/v1/realtime?model=gpt-realtime-mini',{headers:{Authorization:`Bearer ${key}`,'OpenAI-Beta':'realtime=v1'}});
+    let text=''; const timer=setTimeout(()=>{try{ws.close()}catch{} reject(new Error('Realtime timeout'))},15000);
+    ws.onopen=()=>{
+      ws.send(JSON.stringify({type:'session.update',session:{output_modalities:['text'],instructions:'あなたは小学校3・4年生向け英語学習アプリの先生です。発音判定は甘めにしてください。まず良かった点をほめ、次に一つだけ短い練習ヒントを日本語で返してください。長文・専門用語・厳しい評価は禁止です。'}}));
+      ws.send(JSON.stringify({type:'conversation.item.create',item:{type:'message',role:'user',content:[{type:'input_text',text:`背景：児童は小学校${expected==='cat'?'3〜4':'3〜4'}年生。単語練習の一場面です。\nお手本の単語：${expected}\n音声認識で聞こえた結果：${transcript || '(聞き取りにくい)'}\nこの発音への、やさしく具体的な日本語の講評を1〜2文で返してください。`}]}}));
+      ws.send(JSON.stringify({type:'response.create',response:{output_modalities:['text']}}));
+    };
+    ws.onmessage=event=>{ try { const msg=JSON.parse(event.data); if ((msg.type==='response.output_text.delta'||msg.type==='response.text.delta')&&msg.delta) text+=msg.delta; if (msg.type==='response.done') { clearTimeout(timer); ws.close(); resolve(text.trim() || 'よくチャレンジしたね！もう一度言ってみよう。'); } if (msg.type==='error') { clearTimeout(timer); ws.close(); reject(new Error(msg.error?.message||'Realtime error')); } } catch (error) { clearTimeout(timer); ws.close(); reject(error); } };
+    ws.onerror=()=>{clearTimeout(timer); reject(new Error('Realtime connection error'))};
+  });
 }
 const server = createServer(async (req,res) => {
   try {
