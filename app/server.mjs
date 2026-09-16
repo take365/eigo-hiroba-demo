@@ -55,7 +55,7 @@ async function pronunciation(req, expected, profile='adult') {
       console.log(`openpronounce result: expected=${expected} score=${score} transcript=${transcript || '(empty)'}`);
       const judged = await judgePronunciation({expected, expectedPhones:(result.differences?.expected_phones || []).flat().join(' '), heardPhones, score, errors, profile}).catch(error => { console.log(`luna pronunciation judge fallback: ${error.message}`); return null; });
       const finalScore = judged?.score ?? score;
-      return {transcript: heardPhones ? `${transcript}  /${heardPhones}/` : transcript, matched:judged?.matched ?? (finalScore >= passScore && errors.length <= 1), feedback:judged?.feedback || feedback, score:finalScore, openpronounceScore:score, analysis:judged?'openpronounce+luna':'openpronounce', differences:result.differences || null, prosody:result.prosody || null};
+      return {transcript: heardPhones ? `${transcript}  /${heardPhones}/` : transcript, matched:profile === 'child' ? finalScore >= passScore : (judged?.matched ?? (finalScore >= passScore && errors.length <= 1)), feedback:judged?.feedback || feedback, score:finalScore, openpronounceScore:score, analysis:judged?'openpronounce+luna':'openpronounce', differences:result.differences || null, prosody:result.prosody || null};
     } catch (error) {
       console.log(`openpronounce unavailable, fallback to transcription: ${error.message}`);
     }
@@ -68,11 +68,12 @@ async function pronunciation(req, expected, profile='adult') {
   const matched = Boolean(heard) && (heard===target || (target.length>=4 && distance(heard,target)<=1));
   let feedback = matched ? `「${expected}」と聞こえたよ！すごいね 🎉` : `おしい！「${expected}」を、もう一度ゆっくり言ってみよう。`;
   try { feedback = await realtimeFeedback(expected, transcript); } catch (error) { console.log(`realtime feedback fallback: ${error.message}`); }
-  return {transcript,matched,feedback,score:matched?88:42,analysis:'transcription'};
+  const fallbackScore=matched?88:42;
+  return {transcript,matched:profile==='child'?fallbackScore>=40:matched,feedback,score:fallbackScore,analysis:'transcription'};
 }
 async function judgePronunciation({expected, expectedPhones, heardPhones, score, errors, profile}) {
   const child = profile === 'child';
-  const prompt = `あなたは${child?'小学校3年生向け':'小学校3・4年生向け'}英語発音練習アプリの採点先生です。\n背景：${child?'小学生が楽しく英単語の発音を練習しています。':'児童が英単語の発音を練習しています。'}\n対象単語（固定）：${expected}\nお手本の音（IPA/音素）：/${expectedPhones || '不明'}/\n聞こえた音（IPA/音素）：/${heardPhones || '不明'}/\n音声モデルの参考スコア：${Math.round(score)}/100\n音声モデルが報告した誤り数：${errors.length}\n\n「その英単語だと、かろうじて伝わりそう」を${child?'40':'60'}点の目安にして、0〜100点で採点してください。単語が別物、または音がほぼ無い場合だけ低くします。${child?'多少の音のずれはやさしく、できたところを先にほめてください。返答は小3がわかる短い日本語にしてください。':'子ども向けなので、多少の音素ずれは減点しすぎず、明らかに伝わるなら70点以上にしてください。'}対象単語を別の単語に置き換えないでください。返答はJSONのみ。score（整数）、passed（true/false）、hint（日本語1文）、summary（日本語1文）を返してください。`;
+  const prompt = `あなたは${child?'小学校3年生向け':'小学校3・4年生向け'}英語発音練習アプリの採点先生です。\n背景：${child?'小学生が楽しく英単語の発音を練習しています。':'児童が英単語の発音を練習しています。'}\n対象単語（固定）：${expected}\nお手本の音（IPA/音素）：/${expectedPhones || '不明'}/\n聞こえた音（IPA/音素）：/${heardPhones || '不明'}/\n音声モデルの参考スコア：${Math.round(score)}/100\n音声モデルが報告した誤り数：${errors.length}\n\n「その英単語だと、かろうじて伝わりそう」を60点の目安にして、0〜100点で採点してください。単語が別物、または音がほぼ無い場合だけ低くします。${child?'多少の音のずれはやさしく、できたところを先にほめてください。返答は小3がわかる短い日本語にしてください。':'子ども向けなので、多少の音素ずれは減点しすぎず、明らかに伝わるなら70点以上にしてください。'}対象単語を別の単語に置き換えないでください。返答はJSONのみ。score（整数）、passed（true/false）、hint（日本語1文）、summary（日本語1文）を返してください。`;
   const r = await openai('responses',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:pronunciationJudgeModel,input:prompt,text:{format:{type:'json_schema',name:'pronunciation_judgement',strict:true,schema:{type:'object',properties:{score:{type:'integer',minimum:0,maximum:100},passed:{type:'boolean'},hint:{type:'string'},summary:{type:'string'}},required:['score','passed','hint','summary'],additionalProperties:false}}}})});
   const data = await r.json(); const raw = data.output_text || data.output?.flatMap(x=>x.content||[]).find(x=>x.text)?.text || ''; const parsed=JSON.parse(raw); return {score:Math.max(0,Math.min(100,Number(parsed.score))),matched:Boolean(parsed.passed),feedback:`${parsed.summary} ${parsed.hint}`};
 }
