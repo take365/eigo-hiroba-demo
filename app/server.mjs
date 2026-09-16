@@ -32,7 +32,7 @@ async function speak(text, target='') {
   const r = await openai('audio/speech',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'gpt-4o-mini-tts',voice:'coral',input:text,instructions:instruction,response_format:'mp3'})});
   const data = Buffer.from(await r.arrayBuffer()); await writeFile(path,data); return data;
 }
-async function pronunciation(req, expected) {
+async function pronunciation(req, expected, profile='adult') {
   const audio = await body(req); const form = new FormData();
   if (openPronounceUrl) {
     try {
@@ -47,13 +47,15 @@ async function pronunciation(req, expected) {
       const errors = result.differences?.errors || [];
       const heardPhones = (result.differences?.heard_phones || []).join(' ');
       // 小学生向けなので、OpenPronounceの短い単語で出やすい軽微な誤検出を1件まで許容する。
-      const matched = score >= pronouncePassScore && errors.length <= 1;
+      const passScore = profile === 'child' ? 40 : pronouncePassScore;
+      const matched = score >= passScore && errors.length <= 1;
       const feedback = matched
         ? `「${expected}」の音がよくそろっているよ！スコア ${Math.round(score)} 点 🎉`
         : `スコア ${Math.round(score)} 点。${errors[0]?.word ? `「${errors[0].word}」の音を` : '音を'}もう一度ゆっくり言ってみよう。`;
       console.log(`openpronounce result: expected=${expected} score=${score} transcript=${transcript || '(empty)'}`);
-      const judged = await judgePronunciation({expected, expectedPhones:(result.differences?.expected_phones || []).flat().join(' '), heardPhones, score, errors}).catch(error => { console.log(`luna pronunciation judge fallback: ${error.message}`); return null; });
-      return {transcript: heardPhones ? `${transcript}  /${heardPhones}/` : transcript, matched:judged?.matched ?? matched, feedback:judged?.feedback || feedback, score:judged?.score ?? score, openpronounceScore:score, analysis:judged?'openpronounce+luna':'openpronounce', differences:result.differences || null, prosody:result.prosody || null};
+      const judged = await judgePronunciation({expected, expectedPhones:(result.differences?.expected_phones || []).flat().join(' '), heardPhones, score, errors, profile}).catch(error => { console.log(`luna pronunciation judge fallback: ${error.message}`); return null; });
+      const finalScore = judged?.score ?? score;
+      return {transcript: heardPhones ? `${transcript}  /${heardPhones}/` : transcript, matched:judged?.matched ?? (finalScore >= passScore && errors.length <= 1), feedback:judged?.feedback || feedback, score:finalScore, openpronounceScore:score, analysis:judged?'openpronounce+luna':'openpronounce', differences:result.differences || null, prosody:result.prosody || null};
     } catch (error) {
       console.log(`openpronounce unavailable, fallback to transcription: ${error.message}`);
     }
@@ -68,8 +70,9 @@ async function pronunciation(req, expected) {
   try { feedback = await realtimeFeedback(expected, transcript); } catch (error) { console.log(`realtime feedback fallback: ${error.message}`); }
   return {transcript,matched,feedback,score:matched?88:42,analysis:'transcription'};
 }
-async function judgePronunciation({expected, expectedPhones, heardPhones, score, errors}) {
-  const prompt = `あなたは小学校3・4年生向け英語発音練習アプリの採点先生です。\n背景：児童が英単語の発音を練習しています。\n対象単語（固定）：${expected}\nお手本の音（IPA/音素）：/${expectedPhones || '不明'}/\n聞こえた音（IPA/音素）：/${heardPhones || '不明'}/\n音声モデルの参考スコア：${Math.round(score)}/100\n音声モデルが報告した誤り数：${errors.length}\n\n「その英単語だと、かろうじて相手に伝わりそう」を60点の目安にして、0〜100点で採点してください。単語が別物、または音がほぼ無い場合だけ低くします。子ども向けなので、多少の音素ずれは減点しすぎず、明らかに伝わるなら70点以上にしてください。対象単語を別の単語に置き換えないでください。返答はJSONのみ。score（整数）、passed（true/false）、hint（日本語1文）、summary（日本語1文）を返してください。`;
+async function judgePronunciation({expected, expectedPhones, heardPhones, score, errors, profile}) {
+  const child = profile === 'child';
+  const prompt = `あなたは${child?'小学校3年生向け':'小学校3・4年生向け'}英語発音練習アプリの採点先生です。\n背景：${child?'小学生が楽しく英単語の発音を練習しています。':'児童が英単語の発音を練習しています。'}\n対象単語（固定）：${expected}\nお手本の音（IPA/音素）：/${expectedPhones || '不明'}/\n聞こえた音（IPA/音素）：/${heardPhones || '不明'}/\n音声モデルの参考スコア：${Math.round(score)}/100\n音声モデルが報告した誤り数：${errors.length}\n\n「その英単語だと、かろうじて伝わりそう」を${child?'40':'60'}点の目安にして、0〜100点で採点してください。単語が別物、または音がほぼ無い場合だけ低くします。${child?'多少の音のずれはやさしく、できたところを先にほめてください。返答は小3がわかる短い日本語にしてください。':'子ども向けなので、多少の音素ずれは減点しすぎず、明らかに伝わるなら70点以上にしてください。'}対象単語を別の単語に置き換えないでください。返答はJSONのみ。score（整数）、passed（true/false）、hint（日本語1文）、summary（日本語1文）を返してください。`;
   const r = await openai('responses',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:pronunciationJudgeModel,input:prompt,text:{format:{type:'json_schema',name:'pronunciation_judgement',strict:true,schema:{type:'object',properties:{score:{type:'integer',minimum:0,maximum:100},passed:{type:'boolean'},hint:{type:'string'},summary:{type:'string'}},required:['score','passed','hint','summary'],additionalProperties:false}}}})});
   const data = await r.json(); const raw = data.output_text || data.output?.flatMap(x=>x.content||[]).find(x=>x.text)?.text || ''; const parsed=JSON.parse(raw); return {score:Math.max(0,Math.min(100,Number(parsed.score))),matched:Boolean(parsed.passed),feedback:`${parsed.summary} ${parsed.hint}`};
 }
@@ -92,7 +95,7 @@ const server = createServer(async (req,res) => {
   try {
     if (req.method === 'OPTIONS') return send(res,204,'');
     if (req.method === 'POST' && req.url === '/api/speak') { const {text,target} = await json(req); const data=await speak(text,target); return send(res,200,data,{'Content-Type':'audio/mpeg'}); }
-    if (req.method === 'POST' && req.url?.startsWith('/api/pronounce')) { const expected=decodeURIComponent(new URL(req.url,'http://localhost').searchParams.get('expected')||''); const result=await pronunciation(req,expected); return send(res,200,JSON.stringify(result),{'Content-Type':'application/json'}); }
+    if (req.method === 'POST' && req.url?.startsWith('/api/pronounce')) { const params=new URL(req.url,'http://localhost').searchParams; const expected=decodeURIComponent(params.get('expected')||''); const result=await pronunciation(req,expected,params.get('profile')||'adult'); return send(res,200,JSON.stringify(result),{'Content-Type':'application/json'}); }
     const requested = decodeURIComponent((req.url||'/').split('?')[0]); const file = normalize(join(root, requested === '/' ? 'index.html' : requested.slice(1))); if (!file.startsWith(root)) return send(res,403,'Forbidden');
     const data = await readFile(file); return send(res,200,data,{'Content-Type':mime[extname(file)] || 'application/octet-stream'});
   } catch (error) { return send(res,500,JSON.stringify({error:error.message}),{'Content-Type':'application/json'}); }

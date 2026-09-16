@@ -97,5 +97,6 @@ const speakFeedbackObserver = new MutationObserver(async () => {
   } catch {}
 });
 speakFeedbackObserver.observe($('#speakResult'), {childList:true, characterData:true, subtree:true});
+const childSpeakFetch=window.fetch.bind(window); window.fetch=async(input,init)=>{let url=String(input?.url||input||'');if(document.querySelector('#speak.active')&&url.includes('/api/pronounce')&&!url.includes('profile='))url+=(url.includes('?')?'&':'?')+'profile=child';return childSpeakFetch(url,init);};
 renderGenres();
 renderCard();
