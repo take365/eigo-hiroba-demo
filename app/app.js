@@ -81,7 +81,7 @@ $('#speakWord').addEventListener('click', async () => {
   const button = $('#speakWord'); const status = $('#speakStatus');
   if (recorder?.state === 'recording') { recorder.stop(); return; }
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({audio:true}); recorder = new MediaRecorder(stream); chunks=[]; recorder.ondataavailable=e=>chunks.push(e.data); recorder.onstop=async()=>{ stream.getTracks().forEach(t=>t.stop()); button.classList.remove('recording'); button.querySelector('span').textContent='いってみる'; status.textContent='はつおんを きいているよ…'; try { const result=await fetch(`/api/pronounce?expected=${encodeURIComponent(cards[cardIndex].en)}`,{method:'POST',headers:{'Content-Type':recorder.mimeType||'audio/webm'},body:new Blob(chunks,{type:recorder.mimeType||'audio/webm'})}); const data=await result.json(); status.textContent=data.feedback||'もういちど チャレンジしてみよう。'; status.style.color=data.matched?'#279b78':'#d75d72'; const voice=await fetch('/api/speak',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:data.feedback,target:cards[cardIndex].en})}); if(voice.ok){const replyAudio=new Audio(URL.createObjectURL(await voice.blob())); await replyAudio.play();}} catch { status.textContent='うまく ききとれなかったよ。もういちど やってみよう。'; } }; recorder.start(); button.classList.add('recording'); button.querySelector('span').textContent='おわる'; status.textContent='いってみよう！'; setTimeout(()=>{if(recorder?.state==='recording') recorder.stop()},2500);
+    const stream = await navigator.mediaDevices.getUserMedia({audio:true}); recorder = new MediaRecorder(stream); chunks=[]; recorder.ondataavailable=e=>chunks.push(e.data); recorder.onstop=async()=>{ stream.getTracks().forEach(t=>t.stop()); button.classList.remove('recording'); button.querySelector('span').textContent='いってみる'; status.textContent='はつおんを きいているよ…'; try { const result=await fetch(`/api/pronounce?expected=${encodeURIComponent(cards[cardIndex].en)}`,{method:'POST',headers:{'Content-Type':recorder.mimeType||'audio/webm'},body:new Blob(chunks,{type:recorder.mimeType||'audio/webm'})}); const data=await result.json(); status.textContent=data.feedback||'もういちど チャレンジしてみよう。'; status.style.color=data.matched?'#279b78':'#d75d72'; } catch { status.textContent='うまく ききとれなかったよ。もういちど やってみよう。'; } }; recorder.start(); button.classList.add('recording'); button.querySelector('span').textContent='おわる'; status.textContent='いってみよう！'; setTimeout(()=>{if(recorder?.state==='recording') recorder.stop()},2500);
   } catch { status.textContent='マイクが つかえないようです。おてほんを きいてみよう。'; }
 });
 // Realtime講評が表示されたら、単語を明示して自動読み上げする。
@@ -96,7 +96,7 @@ const speakFeedbackObserver = new MutationObserver(async () => {
     if (response.ok) await new Audio(URL.createObjectURL(await response.blob())).play();
   } catch {}
 });
-speakFeedbackObserver.observe($('#speakResult'), {childList:true, characterData:true, subtree:true});
+// 判定結果はLunaのテキストのみ表示し、自動読み上げは行わない。
 const childSpeakFetch=window.fetch.bind(window); window.fetch=async(input,init)=>{let url=String(input?.url||input||'');if(document.querySelector('#speak.active')&&url.includes('/api/pronounce')&&!url.includes('profile='))url+=(url.includes('?')?'&':'?')+'profile=child';return childSpeakFetch(url,init);};
 renderGenres();
 renderCard();
